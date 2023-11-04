@@ -22,6 +22,10 @@ export async function fileDownloadInfo(params: {
 	credentials?: Credentials;
 	hubUrl?: string;
 	/**
+	 * Custom fetch function to use instead of the default one, for example to use a proxy or edit headers.
+	 */
+	fetch?: typeof fetch;
+	/**
 	 * To get the raw pointer file behind a LFS file
 	 */
 	raw?: boolean;
@@ -42,11 +46,12 @@ export async function fileDownloadInfo(params: {
 		}/${encodeURIComponent(params.revision ?? "main")}/${params.path}` +
 		(params.noContentDisposition ? "?noContentDisposition=1" : "");
 
-	const resp = await fetch(url, {
-		method: "HEAD",
+	const resp = await (params.fetch ?? fetch)(url, {
+		method: "GET",
 		headers: params.credentials
 			? {
 					Authorization: `Bearer ${params.credentials.accessToken}`,
+					Range: "bytes=0-0",
 			  }
 			: {},
 	});

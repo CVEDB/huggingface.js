@@ -1,9 +1,8 @@
-import type { Credentials } from "../types/public";
 import type { CommitOutput, CommitParams, ContentSource } from "./commit";
 import { commit } from "./commit";
 
 export function uploadFiles(params: {
-	credentials: Credentials;
+	credentials?: CommitParams["credentials"];
 	repo: CommitParams["repo"];
 	files: Array<URL | File | { path: string; content: ContentSource }>;
 	commitTitle?: CommitParams["title"];
@@ -12,6 +11,8 @@ export function uploadFiles(params: {
 	branch?: CommitParams["branch"];
 	isPullRequest?: CommitParams["isPullRequest"];
 	parentCommit?: CommitParams["parentCommit"];
+	fetch?: CommitParams["fetch"];
+	useWebWorkers?: CommitParams["useWebWorkers"];
 }): Promise<CommitOutput> {
 	return commit({
 		credentials: params.credentials,
@@ -27,5 +28,7 @@ export function uploadFiles(params: {
 		branch: params.branch,
 		isPullRequest: params.isPullRequest,
 		parentCommit: params.parentCommit,
+		fetch: params.fetch,
+		useWebWorkers: params.useWebWorkers,
 	});
 }

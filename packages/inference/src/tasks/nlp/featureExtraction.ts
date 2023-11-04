@@ -1,4 +1,5 @@
 import { InferenceOutputError } from "../../lib/InferenceOutputError";
+import { getDefaultTask } from "../../lib/getDefaultTask";
 import type { BaseArgs, Options } from "../../types";
 import { request } from "../custom/request";
 
@@ -13,9 +14,9 @@ export type FeatureExtractionArgs = BaseArgs & {
 };
 
 /**
- * Returned values are a list of floats, or a list of list of floats (depending on if you sent a string or a list of string, and if the automatic reduction, usually mean_pooling for instance was applied for you or not. This should be explained on the model's README.
+ * Returned values are a multidimensional array of floats (dimension depending on if you sent a string or a list of string, and if the automatic reduction, usually mean_pooling for instance was applied for you or not. This should be explained on the model's README).
  */
-export type FeatureExtractionOutput = (number | number[])[];
+export type FeatureExtractionOutput = (number | number[] | number[][])[];
 
 /**
  * This task reads some text and outputs raw float values, that are usually consumed as part of a semantic database/semantic search.
@@ -24,28 +25,28 @@ export async function featureExtraction(
 	args: FeatureExtractionArgs,
 	options?: Options
 ): Promise<FeatureExtractionOutput> {
-	const res = await request<FeatureExtractionOutput>(args, options);
+	const defaultTask = args.model ? await getDefaultTask(args.model, args.accessToken, options) : undefined;
+
+	const res = await request<FeatureExtractionOutput>(args, {
+		...options,
+		taskHint: "feature-extraction",
+		...(defaultTask === "sentence-similarity" && { forceTask: "feature-extraction" }),
+	});
 	let isValidOutput = true;
-	// Check if output is an array
-	if (Array.isArray(res)) {
-		for (const e of res) {
-			// Check if output is an array of arrays or numbers
-			if (Array.isArray(e)) {
-				// if all elements are numbers, continue
-				isValidOutput = e.every((x) => typeof x === "number");
-				if (!isValidOutput) {
-					break;
-				}
-			} else if (typeof e !== "number") {
-				isValidOutput = false;
-				break;
-			}
+
+	const isNumArrayRec = (arr: unknown[], maxDepth: number, curDepth = 0): boolean => {
+		if (curDepth > maxDepth) return false;
+		if (arr.every((x) => Array.isArray(x))) {
+			return arr.every((x) => isNumArrayRec(x as unknown[], maxDepth, curDepth + 1));
+		} else {
+			return arr.every((x) => typeof x === "number");
 		}
-	} else {
-		isValidOutput = false;
-	}
+	};
+
+	isValidOutput = Array.isArray(res) && isNumArrayRec(res, 3, 0);
+
 	if (!isValidOutput) {
-		throw new InferenceOutputError("Expected Array<number[] | number>");
+		throw new InferenceOutputError("Expected Array<number[][][] | number[][] | number[] | number>");
 	}
 	return res;
 }

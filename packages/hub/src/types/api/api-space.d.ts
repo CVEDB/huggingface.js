@@ -1,5 +1,7 @@
 import type { SpaceRuntime, SpaceSdk } from "../public";
 
+type Color = "red" | "yellow" | "green" | "blue" | "indigo" | "purple" | "pink" | "gray";
+
 export interface ApiSpaceInfo {
 	_id: string;
 	id: string;
@@ -14,7 +16,7 @@ export interface ApiSpaceInfo {
 	duplicationDisabled: boolean;
 	gated: false | "auto" | "manual";
 	gitalyUid: string;
-	lastAuthor: { email: string; user?: AuthorId };
+	lastAuthor: { email: string; user?: string };
 	lastModified: string; // date
 	likes: number;
 	likesRecent: number;
@@ -27,7 +29,7 @@ export interface ApiSpaceInfo {
 	colorFrom: Color;
 	colorTo: Color;
 	pinned: boolean;
-	files: string[];
+	siblings: Array<{ rfilename: string }>;
 	sdk?: SpaceSdk;
 	runtime?: SpaceRuntime;
 	models?: string[];

@@ -15,6 +15,15 @@ await inference.translation({
   inputs: 'My name is Wolfgang and I live in Berlin'
 })
 
+await hf.translation({
+  model: "facebook/nllb-200-distilled-600M",
+  inputs: "how is the weather like in Gaborone",
+  parameters : {
+    src_lang: "eng_Latn",
+    tgt_lang: "sot_Latn"
+  }
+})
+
 await inference.textToImage({
   model: 'stabilityai/stable-diffusion-2',
   inputs: 'award winning high resolution photo of a giant tortoise/((ladybird)) hybrid, [trending on artstation]',
@@ -29,6 +38,7 @@ await inference.textToImage({
 This is a collection of JS libraries to interact with the Hugging Face API, with TS types included.
 
 - [@huggingface/inference](packages/inference/README.md): Use the Inference API to make calls to 100,000+ Machine Learning models, or your own [inference endpoints](https://hf.co/docs/inference-endpoints/)!
+- [@huggingface/agents](packages/agents/README.md): Interact with HF models through a natural language interface
 - [@huggingface/hub](packages/hub/README.md): Interact with huggingface.co to create or delete repos and commit / download files
 
 
@@ -47,12 +57,14 @@ To install via NPM, you can download the libraries as needed:
 ```bash
 npm install @huggingface/inference
 npm install @huggingface/hub
+npm install @huggingface/agents
 ```
 
 Then import the libraries in your code:
 
 ```ts
 import { HfInference } from "@huggingface/inference";
+import { HfAgent } from "@huggingface/agents";
 import { createRepo, commit, deleteRepo, listFiles } from "@huggingface/hub";
 import type { RepoId, Credentials } from "@huggingface/hub";
 ```
@@ -62,12 +74,27 @@ import type { RepoId, Credentials } from "@huggingface/hub";
 You can run our packages with vanilla JS, without any bundler, by using a CDN or static hosting. Using [ES modules](https://hacks.mozilla.org/2018/03/es-modules-a-cartoon-deep-dive/), i.e. `<script type="module">`, you can import the libraries in your code:
 
 ```html
-
 <script type="module">
-    import { HfInference } from 'https://cdn.jsdelivr.net/npm/@huggingface/inference@2.0.0/+esm';
-    import { createRepo, commit, deleteRepo, listFiles } from "https://cdn.jsdelivr.net/npm/@huggingface/hub@0.5.0/+esm";
+    import { HfInference } from 'https://cdn.jsdelivr.net/npm/@huggingface/inference@2.6.4/+esm';
+    import { createRepo, commit, deleteRepo, listFiles } from "https://cdn.jsdelivr.net/npm/@huggingface/hub@0.11.4/+esm";
 </script>
 ```
+
+### Deno
+
+```ts
+// esm.sh
+import { HfInference } from "https://esm.sh/@huggingface/inference"
+import { HfAgent } from "https://esm.sh/@huggingface/agents";
+
+import { createRepo, commit, deleteRepo, listFiles } from "https://esm.sh/@huggingface/hub"
+// or npm:
+import { HfInference } from "npm:@huggingface/inference"
+import { HfAgent } from "npm:@huggingface/agents";
+
+import { createRepo, commit, deleteRepo, listFiles } from "npm:@huggingface/hub"
+```
+
 
 ## Usage examples
 
@@ -82,6 +109,7 @@ const HF_ACCESS_TOKEN = "hf_...";
 
 const inference = new HfInference(HF_ACCESS_TOKEN);
 
+// You can also omit "model" to use the recommended model for the task
 await inference.translation({
   model: 't5-base',
   inputs: 'My name is Wolfgang and I live in Berlin'
@@ -103,6 +131,30 @@ await inference.imageToText({
 // Using your own inference endpoint: https://hf.co/docs/inference-endpoints/
 const gpt2 = inference.endpoint('https://xyz.eu-west-1.aws.endpoints.huggingface.cloud/gpt2');
 const { generated_text } = await gpt2.textGeneration({inputs: 'The answer to the universe is'});
+```
+### @huggingface/agents example
+
+```ts
+import {HfAgent, LLMFromHub, defaultTools} from '@huggingface/agents';
+
+const HF_ACCESS_TOKEN = "hf_...";
+
+const agent = new HfAgent(
+  HF_ACCESS_TOKEN,
+  LLMFromHub(HF_ACCESS_TOKEN),
+  [...defaultTools]
+);
+
+
+// you can generate the code, inspect it and then run it
+const code = await agent.generateCode("Draw a picture of a cat wearing a top hat. Then caption the picture and read it out loud.");
+console.log(code);
+const messages = await agent.evaluateCode(code)
+console.log(messages); // contains the data
+
+// or you can run the code directly, however you can't check that the code is safe to execute this way, use at your own risk.
+const messages = await agent.run("Draw a picture of a cat wearing a top hat. Then caption the picture and read it out loud.")
+console.log(messages); 
 ```
 
 ### @huggingface/hub examples
@@ -134,11 +186,13 @@ await deleteFiles({
 });
 ```
 
+
 There are more features of course, check each library's README!
 
 ## Formatting & testing
 
 ```console
+sudo corepack enable
 pnpm install
 
 pnpm -r format:check

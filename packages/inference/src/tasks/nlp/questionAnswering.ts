@@ -35,9 +35,14 @@ export async function questionAnswering(
 	args: QuestionAnsweringArgs,
 	options?: Options
 ): Promise<QuestionAnsweringOutput> {
-	const res = await request<QuestionAnsweringOutput>(args, options);
+	const res = await request<QuestionAnsweringOutput>(args, {
+		...options,
+		taskHint: "question-answering",
+	});
 	const isValidOutput =
-		typeof res?.answer === "string" &&
+		typeof res === "object" &&
+		!!res &&
+		typeof res.answer === "string" &&
 		typeof res.end === "number" &&
 		typeof res.score === "number" &&
 		typeof res.start === "number";

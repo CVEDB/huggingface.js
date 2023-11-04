@@ -1,4 +1,4 @@
-import type { Options, RequestArgs } from "../../types";
+import type { InferenceTask, Options, RequestArgs } from "../../types";
 import { makeRequestOptions } from "../../lib/makeRequestOptions";
 import type { EventSourceMessage } from "../../vendor/fetch-event-source/parse";
 import { getLines, getMessages } from "../../vendor/fetch-event-source/parse";
@@ -9,12 +9,14 @@ import { getLines, getMessages } from "../../vendor/fetch-event-source/parse";
 export async function* streamingRequest<T>(
 	args: RequestArgs,
 	options?: Options & {
-		/** For internal HF use, which is why it's not exposed in {@link Options} */
-		includeCredentials?: boolean;
+		/** When a model can be used for multiple tasks, and we want to run a non-default task */
+		task?: string | InferenceTask;
+		/** To load default model if needed */
+		taskHint?: InferenceTask;
 	}
 ): AsyncGenerator<T> {
-	const { url, info } = makeRequestOptions({ ...args, stream: true }, options);
-	const response = await fetch(url, info);
+	const { url, info } = await makeRequestOptions({ ...args, stream: true }, options);
+	const response = await (options?.fetch ?? fetch)(url, info);
 
 	if (options?.retry_on_error !== false && response.status === 503 && !options?.wait_for_model) {
 		return streamingRequest(args, {
@@ -32,7 +34,7 @@ export async function* streamingRequest<T>(
 
 		throw new Error(`Server response contains error: ${response.status}`);
 	}
-	if (response.headers.get("content-type") !== "text/event-stream") {
+	if (!response.headers.get("content-type")?.startsWith("text/event-stream")) {
 		throw new Error(
 			`Server does not support event stream content type, it returned ` + response.headers.get("content-type")
 		);
@@ -65,7 +67,11 @@ export async function* streamingRequest<T>(
 			onChunk(value);
 			for (const event of events) {
 				if (event.data.length > 0) {
-					yield JSON.parse(event.data) as T;
+					const data = JSON.parse(event.data);
+					if (typeof data === "object" && data !== null && "error" in data) {
+						throw new Error(data.error);
+					}
+					yield data as T;
 				}
 			}
 			events = [];

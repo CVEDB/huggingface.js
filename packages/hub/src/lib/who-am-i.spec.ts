@@ -1,10 +1,10 @@
 import { assert, it, describe } from "vitest";
-import { TEST_ACCESS_TOKEN } from "../consts";
+import { TEST_ACCESS_TOKEN, TEST_HUB_URL } from "../test/consts";
 import { whoAmI } from "./who-am-i";
 
 describe("whoAmI", () => {
 	it("should fetch identity info", async () => {
-		const info = await whoAmI({ credentials: { accessToken: TEST_ACCESS_TOKEN } });
+		const info = await whoAmI({ credentials: { accessToken: TEST_ACCESS_TOKEN }, hubUrl: TEST_HUB_URL });
 
 		assert.deepStrictEqual(info, {
 			type: "user",
@@ -22,7 +22,7 @@ describe("whoAmI", () => {
 			auth: {
 				type: "access_token",
 				accessToken: {
-					displayName: "ci-huggingface-hub.js",
+					displayName: "ci-hub.js",
 					role: "write",
 				},
 			},

@@ -44,6 +44,23 @@ describe.concurrent(
 			);
 		});
 
+		it("works without model", async () => {
+			expect(
+				await hf.fillMask({
+					inputs: "[MASK] world!",
+				})
+			).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						score: expect.any(Number),
+						token: expect.any(Number),
+						token_str: expect.any(String),
+						sequence: expect.any(String),
+					}),
+				])
+			);
+		});
+
 		it("summarization", async () => {
 			expect(
 				await hf.summarization({
@@ -96,6 +113,53 @@ describe.concurrent(
 				coordinates: [[0, 1]],
 				cells: ["36542"],
 				aggregator: "AVERAGE",
+			});
+		});
+
+		it("documentQuestionAnswering", async () => {
+			expect(
+				await hf.documentQuestionAnswering({
+					model: "impira/layoutlm-document-qa",
+					inputs: {
+						question: "Invoice number?",
+						image: new Blob([readTestFile("invoice.png")], { type: "image/png" }),
+					},
+				})
+			).toMatchObject({
+				answer: "us-001",
+				score: expect.any(Number),
+				// not sure what start/end refers to in this case
+				start: expect.any(Number),
+				end: expect.any(Number),
+			});
+		});
+
+		it("documentQuestionAnswering with non-array output", async () => {
+			expect(
+				await hf.documentQuestionAnswering({
+					model: "naver-clova-ix/donut-base-finetuned-docvqa",
+					inputs: {
+						question: "Invoice number?",
+						image: new Blob([readTestFile("invoice.png")], { type: "image/png" }),
+					},
+				})
+			).toMatchObject({
+				answer: "us-001",
+			});
+		});
+
+		it("visualQuestionAnswering", async () => {
+			expect(
+				await hf.visualQuestionAnswering({
+					model: "dandelin/vilt-b32-finetuned-vqa",
+					inputs: {
+						question: "How many cats are lying down?",
+						image: new Blob([readTestFile("cats.png")], { type: "image/png" }),
+					},
+				})
+			).toMatchObject({
+				answer: "2",
+				score: expect.any(Number),
 			});
 		});
 
@@ -169,6 +233,38 @@ describe.concurrent(
 			}
 		});
 
+		it("textGenerationStream - catch error", async () => {
+			const response = hf.textGenerationStream({
+				model: "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",
+				inputs: "Write a short story about a robot that becomes sentient and takes over the world.",
+				parameters: {
+					max_new_tokens: 10_000,
+				},
+			});
+
+			await expect(response.next()).rejects.toThrow(
+				"Input validation error: `inputs` tokens + `max_new_tokens` must be <= 4096. Given: 17 `inputs` tokens and 10000 `max_new_tokens`"
+			);
+		});
+
+		it.skip("textGenerationStream - Abort", async () => {
+			const controller = new AbortController();
+			const response = hf.textGenerationStream(
+				{
+					model: "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",
+					inputs: "Write an essay about Sartre's philosophy.",
+					parameters: {
+						max_new_tokens: 100,
+					},
+				},
+				{ signal: controller.signal }
+			);
+			await expect(response.next()).resolves.toBeDefined();
+			await expect(response.next()).resolves.toBeDefined();
+			controller.abort();
+			await expect(response.next()).rejects.toThrow("The operation was aborted");
+		});
+
 		it("tokenClassification", async () => {
 			expect(
 				await hf.tokenClassification({
@@ -197,6 +293,20 @@ describe.concurrent(
 			).toMatchObject({
 				translation_text: "Mein Name ist Wolfgang und ich lebe in Berlin",
 			});
+			// input is a list
+			expect(
+				await hf.translation({
+					model: "t5-base",
+					inputs: ["My name is Wolfgang and I live in Berlin", "I work as programmer"],
+				})
+			).toMatchObject([
+				{
+					translation_text: "Mein Name ist Wolfgang und ich lebe in Berlin",
+				},
+				{
+					translation_text: "Ich arbeite als Programmierer",
+				},
+			]);
 		});
 		it("zeroShotClassification", async () => {
 			expect.extend({
@@ -285,6 +395,60 @@ describe.concurrent(
 			});
 			expect(response).toEqual(expect.arrayContaining([expect.any(Number)]));
 		});
+		it("FeatureExtraction - same model as sentence similarity", async () => {
+			const response = await hf.featureExtraction({
+				model: "sentence-transformers/paraphrase-xlm-r-multilingual-v1",
+				inputs: "That is a happy person",
+			});
+
+			expect(response.length).toBeGreaterThan(10);
+			expect(response).toEqual(expect.arrayContaining([expect.any(Number)]));
+		});
+		it("FeatureExtraction - facebook/bart-base", async () => {
+			const response = await hf.featureExtraction({
+				model: "facebook/bart-base",
+				inputs: "That is a happy person",
+			});
+			// 1x7x768
+			expect(response).toEqual([
+				[
+					expect.arrayContaining([expect.any(Number)]),
+					expect.arrayContaining([expect.any(Number)]),
+					expect.arrayContaining([expect.any(Number)]),
+					expect.arrayContaining([expect.any(Number)]),
+					expect.arrayContaining([expect.any(Number)]),
+					expect.arrayContaining([expect.any(Number)]),
+					expect.arrayContaining([expect.any(Number)]),
+				],
+			]);
+		});
+		it("FeatureExtraction - facebook/bart-base, list input", async () => {
+			const response = await hf.featureExtraction({
+				model: "facebook/bart-base",
+				inputs: ["hello", "That is a happy person"],
+			});
+			// Nx1xTx768
+			expect(response).toEqual([
+				[
+					[
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+					],
+				],
+				[
+					[
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+						expect.arrayContaining([expect.any(Number)]),
+					],
+				],
+			]);
+		});
 		it("automaticSpeechRecognition", async () => {
 			expect(
 				await hf.automaticSpeechRecognition({
@@ -310,6 +474,33 @@ describe.concurrent(
 				])
 			);
 		});
+
+		it("audioToAudio", async () => {
+			expect(
+				await hf.audioToAudio({
+					model: "speechbrain/sepformer-wham",
+					data: new Blob([readTestFile("sample1.flac")], { type: "audio/flac" }),
+				})
+			).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						label: expect.any(String),
+						blob: expect.any(String),
+						"content-type": expect.any(String),
+					}),
+				])
+			);
+		});
+
+		it("textToSpeech", async () => {
+			expect(
+				await hf.textToSpeech({
+					model: "espnet/kan-bayashi_ljspeech_vits",
+					inputs: "hello there!",
+				})
+			).toBeInstanceOf(Blob);
+		});
+
 		it("imageClassification", async () => {
 			expect(
 				await hf.imageClassification({
@@ -325,6 +516,32 @@ describe.concurrent(
 				])
 			);
 		});
+
+		it("zeroShotImageClassification", async () => {
+			expect(
+				await hf.zeroShotImageClassification({
+					inputs: { image: new Blob([readTestFile("cheetah.png")], { type: "image/png" }) },
+					model: "openai/clip-vit-large-patch14-336",
+					parameters: {
+						candidate_labels: ["animal", "toy", "car"],
+					},
+				})
+			).toEqual([
+				{
+					label: "animal",
+					score: expect.any(Number),
+				},
+				{
+					label: "car",
+					score: expect.any(Number),
+				},
+				{
+					label: "toy",
+					score: expect.any(Number),
+				},
+			]);
+		});
+
 		it("objectDetection", async () => {
 			expect(
 				await hf.imageClassification({
@@ -361,6 +578,26 @@ describe.concurrent(
 					}),
 				])
 			);
+		});
+		it("imageToImage", async () => {
+			const num_inference_steps = 25;
+
+			const res = await hf.imageToImage({
+				inputs: new Blob([readTestFile("stormtrooper_depth.png")], { type: "image / png" }),
+				parameters: {
+					prompt: "elmo's lecture",
+					num_inference_steps,
+				},
+				model: "lllyasviel/sd-controlnet-depth",
+			});
+			expect(res).toBeInstanceOf(Blob);
+		});
+		it("imageToImage blob data", async () => {
+			const res = await hf.imageToImage({
+				inputs: new Blob([readTestFile("bird_canny.png")], { type: "image / png" }),
+				model: "lllyasviel/sd-controlnet-canny",
+			});
+			expect(res).toBeInstanceOf(Blob);
 		});
 		it("textToImage", async () => {
 			const res = await hf.textToImage({
@@ -409,6 +646,48 @@ describe.concurrent(
 				},
 			]);
 		});
+
+		it("tabularRegression", async () => {
+			expect(
+				await hf.tabularRegression({
+					model: "scikit-learn/Fish-Weight",
+					inputs: {
+						data: {
+							Height: ["11.52", "12.48", "12.3778"],
+							Length1: ["23.2", "24", "23.9"],
+							Length2: ["25.4", "26.3", "26.5"],
+							Length3: ["30", "31.2", "31.1"],
+							Species: ["Bream", "Bream", "Bream"],
+							Width: ["4.02", "4.3056", "4.6961"],
+						},
+					},
+				})
+			).toMatchObject([270.5473526976245, 313.6843425638086, 328.3727133404402]);
+		});
+
+		it("tabularClassification", async () => {
+			expect(
+				await hf.tabularClassification({
+					model: "vvmnnnkv/wine-quality",
+					inputs: {
+						data: {
+							fixed_acidity: ["7.4", "7.8", "10.3"],
+							volatile_acidity: ["0.7", "0.88", "0.32"],
+							citric_acid: ["0", "0", "0.45"],
+							residual_sugar: ["1.9", "2.6", "6.4"],
+							chlorides: ["0.076", "0.098", "0.073"],
+							free_sulfur_dioxide: ["11", "25", "5"],
+							total_sulfur_dioxide: ["34", "67", "13"],
+							density: ["0.9978", "0.9968", "0.9976"],
+							pH: ["3.51", "3.2", "3.23"],
+							sulphates: ["0.56", "0.68", "0.82"],
+							alcohol: ["9.4", "9.8", "12.6"],
+						},
+					},
+				})
+			).toMatchObject([5, 5, 7]);
+		});
+
 		it("endpoint - makes request to specified endpoint", async () => {
 			const ep = hf.endpoint("https://api-inference.huggingface.co/models/google/flan-t5-xxl");
 			const { generated_text } = await ep.textGeneration({

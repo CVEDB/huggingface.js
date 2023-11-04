@@ -1,6 +1,6 @@
 import { omit } from "../src/utils/omit";
-import { isFrontend } from "../../shared/src/isFrontend";
-import { isBackend } from "../../shared/src/isBackend";
+import { isBackend, isFrontend } from "../../shared";
+import { HF_HUB_URL } from "../src/lib/getDefaultTask";
 
 const TAPES_FILE = "./tapes.json";
 const BASE64_PREFIX = "data:application/octet-stream;base64,";
@@ -115,7 +115,7 @@ async function vcr(
 
 	const { default: tapes } = await import(TAPES_FILE);
 
-	if (VCR_MODE === MODE.PLAYBACK) {
+	if (VCR_MODE === MODE.PLAYBACK && !url.startsWith(HF_HUB_URL)) {
 		if (!tapes[hash]) {
 			throw new Error(`Tape not found: ${hash} (${url})`);
 		}
@@ -133,32 +133,62 @@ async function vcr(
 
 	const response = await originalFetch(input, init);
 
+	if (url.startsWith(HF_HUB_URL)) {
+		return response;
+	}
+
 	if (VCR_MODE === MODE.RECORD || VCR_MODE === MODE.CACHE) {
 		const isText =
 			response.headers.get("Content-Type")?.includes("json") || response.headers.get("Content-Type")?.includes("text");
+		const isJson = response.headers.get("Content-Type")?.includes("json");
 		const arrayBuffer = await response.arrayBuffer();
+
+		let body = "";
+		if (isText || isJson) {
+			body = new TextDecoder().decode(arrayBuffer);
+			if (isJson) {
+				// check for base64 strings and truncate them
+				body = JSON.stringify(
+					JSON.parse(body, (key: unknown, value: unknown): unknown => {
+						if (
+							typeof value === "string" &&
+							value.length > 1_000 &&
+							// base64 heuristic
+							value.length % 4 === 0 &&
+							value.match(/^[a-zA-Z0-9+/]+={0,2}$/)
+						) {
+							return value.slice(0, 1_000);
+						} else {
+							return value;
+						}
+					})
+				);
+			}
+		} else {
+			// // Alternative to also save binary data:
+			// arrayBuffer.byteLength > 30_000
+			// 	? ""
+			// 	: isText
+			// 	? new TextDecoder().decode(arrayBuffer)
+			// 	: BASE64_PREFIX + base64FromBytes(new Uint8Array(arrayBuffer)),
+			body = "";
+		}
 
 		const tape: Tape = {
 			url,
 			init: {
-				headers: omit(init.headers as Record<string, string>, "Authorization"),
+				headers: init.headers && omit(init.headers as Record<string, string>, "Authorization"),
 				method: init.method,
 				body: typeof init.body === "string" && init.body.length < 1_000 ? init.body : undefined,
 			},
 			response: {
-				body: isText ? new TextDecoder().decode(arrayBuffer) : "",
-				// // Alternative to also save binary data:
-				// arrayBuffer.byteLength > 30_000
-				// 	? ""
-				// 	: isText
-				// 	? new TextDecoder().decode(arrayBuffer)
-				// 	: BASE64_PREFIX + base64FromBytes(new Uint8Array(arrayBuffer)),
+				body,
 				status: response.status,
 				statusText: response.statusText,
 				headers: Object.fromEntries(
 					// Remove varying headers as much as possible
 					[...response.headers.entries()].filter(
-						([key]) => key !== "date" && key !== "content-length" && !key.startsWith("x-")
+						([key]) => key !== "date" && key !== "content-length" && !key.startsWith("x-") && key !== "via"
 					)
 				),
 			},

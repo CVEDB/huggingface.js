@@ -1,25 +1,56 @@
-import type { Options, RequestArgs } from "../types";
+import type { InferenceTask, Options, RequestArgs } from "../types";
+import { HF_HUB_URL } from "./getDefaultTask";
+import { isUrl } from "./isUrl";
 
-const HF_INFERENCE_API_BASE_URL = "https://api-inference.huggingface.co/models/";
+const HF_INFERENCE_API_BASE_URL = "https://api-inference.huggingface.co";
+
+/**
+ * Loaded from huggingface.co/api/tasks if needed
+ */
+let tasks: Record<string, { models: { id: string }[] }> | null = null;
 
 /**
  * Helper that prepares request arguments
  */
-export function makeRequestOptions(
+export async function makeRequestOptions(
 	args: RequestArgs & {
 		data?: Blob | ArrayBuffer;
 		stream?: boolean;
 	},
 	options?: Options & {
-		/** For internal HF use, which is why it's not exposed in {@link Options} */
-		includeCredentials?: boolean;
+		/** When a model can be used for multiple tasks, and we want to run a non-default task */
+		forceTask?: string | InferenceTask;
+		/** To load default model if needed */
+		taskHint?: InferenceTask;
 	}
-): { url: string; info: RequestInit } {
-	const { model, accessToken, ...otherArgs } = args;
+): Promise<{ url: string; info: RequestInit }> {
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	const { accessToken, model: _model, ...otherArgs } = args;
+	let { model } = args;
+	const { forceTask: task, includeCredentials, taskHint, ...otherOptions } = options ?? {};
 
 	const headers: Record<string, string> = {};
 	if (accessToken) {
 		headers["Authorization"] = `Bearer ${accessToken}`;
+	}
+
+	if (!model && !tasks && taskHint) {
+		const res = await fetch(`${HF_HUB_URL}/api/tasks`);
+
+		if (res.ok) {
+			tasks = await res.json();
+		}
+	}
+
+	if (!model && tasks && taskHint) {
+		const taskInfo = tasks[taskHint];
+		if (taskInfo) {
+			model = taskInfo.models[0].id;
+		}
+	}
+
+	if (!model) {
+		throw new Error("No model provided, and no default model found for this task");
 	}
 
 	const binary = "data" in args && !!args.data;
@@ -38,7 +69,33 @@ export function makeRequestOptions(
 		}
 	}
 
-	const url = /^http(s?):/.test(model) || model.startsWith("/") ? model : `${HF_INFERENCE_API_BASE_URL}${model}`;
+	const url = (() => {
+		if (isUrl(model)) {
+			return model;
+		}
+
+		if (task) {
+			return `${HF_INFERENCE_API_BASE_URL}/pipeline/${task}/${model}`;
+		}
+
+		return `${HF_INFERENCE_API_BASE_URL}/models/${model}`;
+	})();
+
+	// Let users configure credentials, or disable them all together (or keep default behavior).
+	// ---
+	// This used to be an internal property only and never exposed to users. This means that most usages will never define this value
+	// So in order to make this backwards compatible, if it's undefined we go to "same-origin" (default behaviour before).
+	// If it's a boolean and set to true then set to "include". If false, don't define credentials at all (useful for edge runtimes)
+	// Then finally, if it's a string, use it as-is.
+	let credentials: RequestCredentials | undefined;
+	if (typeof includeCredentials === "string") {
+		credentials = includeCredentials as RequestCredentials;
+	} else if (typeof includeCredentials === "boolean") {
+		credentials = includeCredentials ? "include" : undefined;
+	} else if (includeCredentials === undefined) {
+		credentials = "same-origin";
+	}
+
 	const info: RequestInit = {
 		headers,
 		method: "POST",
@@ -46,9 +103,10 @@ export function makeRequestOptions(
 			? args.data
 			: JSON.stringify({
 					...otherArgs,
-					options,
+					options: options && otherOptions,
 			  }),
-		credentials: options?.includeCredentials ? "include" : "same-origin",
+		credentials,
+		signal: options?.signal,
 	};
 
 	return { url, info };

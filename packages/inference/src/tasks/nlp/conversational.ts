@@ -63,15 +63,15 @@ export interface ConversationalOutput {
  *
  */
 export async function conversational(args: ConversationalArgs, options?: Options): Promise<ConversationalOutput> {
-	const res = await request<ConversationalOutput>(args, options);
+	const res = await request<ConversationalOutput>(args, { ...options, taskHint: "conversational" });
 	const isValidOutput =
 		Array.isArray(res.conversation.generated_responses) &&
 		res.conversation.generated_responses.every((x) => typeof x === "string") &&
 		Array.isArray(res.conversation.past_user_inputs) &&
 		res.conversation.past_user_inputs.every((x) => typeof x === "string") &&
 		typeof res.generated_text === "string" &&
-		Array.isArray(res.warnings) &&
-		res.warnings.every((x) => typeof x === "string");
+		(typeof res.warnings === "undefined" ||
+			(Array.isArray(res.warnings) && res.warnings.every((x) => typeof x === "string")));
 	if (!isValidOutput) {
 		throw new InferenceOutputError(
 			"Expected {conversation: {generated_responses: string[], past_user_inputs: string[]}, generated_text: string, warnings: string[]}"

@@ -20,7 +20,54 @@ export interface Options {
 	 * (Default: false) Boolean. If the model is not ready, wait for it instead of receiving 503. It limits the number of requests required to get your inference done. It is advised to only set this flag to true after receiving a 503 error as it will limit hanging in your application to known places.
 	 */
 	wait_for_model?: boolean;
+	/**
+	 * Custom fetch function to use instead of the default one, for example to use a proxy or edit headers.
+	 */
+	fetch?: typeof fetch;
+	/**
+	 * Abort Controller signal to use for request interruption.
+	 */
+	signal?: AbortSignal;
+
+	/**
+	 * (Default: "same-origin"). String | Boolean. Credentials to use for the request. If this is a string, it will be passed straight on. If it's a boolean, true will be "include" and false will not send credentials at all.
+	 */
+	includeCredentials?: string | boolean;
 }
+
+export type InferenceTask =
+	| "audio-classification"
+	| "audio-to-audio"
+	| "automatic-speech-recognition"
+	| "conversational"
+	| "depth-estimation"
+	| "document-question-answering"
+	| "feature-extraction"
+	| "fill-mask"
+	| "image-classification"
+	| "image-segmentation"
+	| "image-to-image"
+	| "image-to-text"
+	| "object-detection"
+	| "video-classification"
+	| "question-answering"
+	| "reinforcement-learning"
+	| "sentence-similarity"
+	| "summarization"
+	| "table-question-answering"
+	| "tabular-classification"
+	| "tabular-regression"
+	| "text-classification"
+	| "text-generation"
+	| "text-to-image"
+	| "text-to-speech"
+	| "text-to-video"
+	| "token-classification"
+	| "translation"
+	| "unconditional-image-generation"
+	| "visual-question-answering"
+	| "zero-shot-classification"
+	| "zero-shot-image-classification";
 
 export interface BaseArgs {
 	/**
@@ -31,8 +78,10 @@ export interface BaseArgs {
 	accessToken?: string;
 	/**
 	 * The model to use. Can be a full URL for HF inference endpoints.
+	 *
+	 * If not specified, will call huggingface.co/api/tasks to get the default model for the task.
 	 */
-	model: string;
+	model?: string;
 }
 
 export type RequestArgs = BaseArgs &

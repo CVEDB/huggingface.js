@@ -1,6 +1,7 @@
 {
 	"name": "@huggingface/hub",
-	"version": "0.5.0",
+	"packageManager": "pnpm@8.3.1",
+	"version": "0.11.4",
 	"description": "Utilities to interact with the Hugging Face hub",
 	"repository": "https://github.com/huggingface/huggingface.js.git",
 	"publishConfig": {
@@ -8,13 +9,19 @@
 	},
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
-	"types": "./index.ts",
+	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./index.ts",
+			"types": "./dist/index.d.ts",
 			"require": "./dist/index.js",
 			"import": "./dist/index.mjs"
 		}
+	},
+	"browser": {
+		"./src/utils/sha256-node.ts": false,
+		"./src/utils/FileBlob.ts": false,
+		"./dist/index.js": "./dist/browser/index.js",
+		"./dist/index.mjs": "./dist/browser/index.mjs"
 	},
 	"engines": {
 		"node": ">=18"
@@ -25,8 +32,8 @@
 		"lint:check": "eslint --ext .cjs,.ts .",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"prepublishOnly": "npm run build",
-		"build": "tsup src/index.ts --format cjs,esm --clean --dts-resolve",
+		"prepublishOnly": "pnpm run build",
+		"build": "tsup",
 		"test": "vitest run",
 		"test:browser": "vitest run --browser.name=chrome --browser.headless --config ./vitest-browser.config.ts",
 		"type-check": "tsc"
@@ -49,6 +56,7 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^18.13.0",
+		"type-fest": "^3.9.0",
 		"typescript": "^5.0.4"
 	},
 	"dependencies": {

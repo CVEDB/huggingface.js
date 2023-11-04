@@ -25,9 +25,7 @@ jobs:
             echo "SINCE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} ${{ github.sha }})" >> $GITHUB_OUTPUT
           fi
 
-      - uses: pnpm/action-setup@v2
-        with:
-          version: 7.1.5
+      - run: corepack enable
 
       - uses: actions/setup-node@v3
         with:
@@ -36,7 +34,8 @@ jobs:
           cache-dependency-path: "**/pnpm-lock.yaml"
       - run: |
           pnpm install --frozen-lockfile --filter .
-          pnpm install --frozen-lockfile --filter ...[${{ steps.since.outputs.SINCE }}]
+          pnpm install --frozen-lockfile --filter ...[${{ steps.since.outputs.SINCE }}]...
+          pnpm --filter [${{ steps.since.outputs.SINCE }}]... build
       - name: "Checking lint errors"
         run: |
           pnpm --filter ...[${{ steps.since.outputs.SINCE }}] lint:check
@@ -49,11 +48,54 @@ jobs:
         run: pnpm --filter ...[${{ steps.since.outputs.SINCE }}] type-check
 
       - name: Test
-        run: pnpm --filter ...[${{ steps.since.outputs.SINCE }}] test
+        run: VCR_MODE=playback pnpm --filter ...[${{ steps.since.outputs.SINCE }}] test
         env:
           HF_ACCESS_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
 
       - name: Test in browser
-        run: pnpm --filter ...[${{ steps.since.outputs.SINCE }}] test:browser
+        run: VCR_MODE=playback pnpm --filter ...[${{ steps.since.outputs.SINCE }}] test:browser
         env:
           HF_ACCESS_TOKEN: ${{ secrets.HF_ACCESS_TOKEN }}
+
+      - name: E2E - start mock npm registry
+        run: |
+          npm i -g verdaccio verdaccio-memory verdaccio-auth-memory
+          echo >> .npmrc
+          echo "//localhost:4874/:_authToken=1FlYaQkIdHsIztXCHmqu9g==" >> .npmrc
+          npx verdaccio --listen 4874 --config e2e/mock-registry-config.yaml &
+
+      - name: E2E test - publish packages to mock repo
+        working-directory: e2e
+        run: |
+          sleep 3
+          pnpm i --filter inference --filter hub --frozen-lockfile
+          pnpm --filter inference --filter hub publish --force --no-git-checks --registry http://localhost:4874/
+
+      - name: E2E test - test yarn install
+        working-directory: e2e/ts
+        run: |
+          npm i -g yarn --force
+          yarn install --registry http://localhost:4874/
+
+      - name: E2E test - typescript node project
+        working-directory: e2e/ts
+        run: |
+          pnpm i --ignore-workspace --registry http://localhost:4874/
+          pnpm start
+        env:
+          token: ${{ secrets.HF_ACCESS_TOKEN }}
+
+      - name: E2E test - svelte app build
+        working-directory: e2e/svelte
+        run: |
+          pnpm i --ignore-workspace --registry http://localhost:4874/
+          pnpm build
+
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: vx.x.x
+      - name: E2E test - deno import from npm
+        working-directory: e2e/deno
+        run: deno run --allow-net index.ts
+        env:
+          NPM_CONFIG_REGISTRY: http://localhost:4874/

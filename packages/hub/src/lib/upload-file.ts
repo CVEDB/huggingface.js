@@ -3,7 +3,7 @@ import type { CommitOutput, CommitParams, ContentSource } from "./commit";
 import { commit } from "./commit";
 
 export function uploadFile(params: {
-	credentials: Credentials;
+	credentials?: Credentials;
 	repo: CommitParams["repo"];
 	file: URL | File | { path: string; content: ContentSource };
 	commitTitle?: CommitParams["title"];
@@ -12,6 +12,8 @@ export function uploadFile(params: {
 	branch?: CommitParams["branch"];
 	isPullRequest?: CommitParams["isPullRequest"];
 	parentCommit?: CommitParams["parentCommit"];
+	fetch?: CommitParams["fetch"];
+	useWebWorkers?: CommitParams["useWebWorkers"];
 }): Promise<CommitOutput> {
 	const path =
 		params.file instanceof URL
@@ -36,5 +38,7 @@ export function uploadFile(params: {
 		branch: params.branch,
 		isPullRequest: params.isPullRequest,
 		parentCommit: params.parentCommit,
+		fetch: params.fetch,
+		useWebWorkers: params.useWebWorkers,
 	});
 }

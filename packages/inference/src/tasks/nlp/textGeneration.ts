@@ -44,6 +44,14 @@ export type TextGenerationArgs = BaseArgs & {
 		 * (Default: None). Float to define the tokens that are within the sample operation of text generation. Add tokens in the sample for more probable to least probable until the sum of the probabilities is greater than top_p.
 		 */
 		top_p?: number;
+		/**
+		 * (Default: None). Integer. The maximum number of tokens from the input.
+		 */
+		truncate?: number;
+		/**
+		 * (Default: []) List of strings. The model will stop generating text when one of the strings in the list is generated.
+		 * **/
+		stop_sequences?: string[];
 	};
 };
 
@@ -58,7 +66,10 @@ export interface TextGenerationOutput {
  * Use to continue text from a prompt. This is a very generic task. Recommended model: gpt2 (it’s a simple model, but fun to play with).
  */
 export async function textGeneration(args: TextGenerationArgs, options?: Options): Promise<TextGenerationOutput> {
-	const res = await request<TextGenerationOutput[]>(args, options);
+	const res = await request<TextGenerationOutput[]>(args, {
+		...options,
+		taskHint: "text-generation",
+	});
 	const isValidOutput = Array.isArray(res) && res.every((x) => typeof x?.generated_text === "string");
 	if (!isValidOutput) {
 		throw new InferenceOutputError("Expected Array<{generated_text: string}>");
